@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรายงานยอดผู้ป่วยและแดชบอร์ดหอผู้ป่วย</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Sarabun & Prompt -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'Sarabun', 'sans-serif'],
+                    },
+                    colors: {
+                        medical: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#0f4c81',
+                            800: '#0c4a6e',
+                        },
+                        shift: {
+                            morning: '#3b82f6',   // เช้า - น้ำเงิน
+                            afternoon: '#f59e0b', // บ่าย - ส้ม
+                            night: '#6366f1',     // ดึก - ม่วง
+                        },
+                        type1: '#10b981', // เล็กน้อย
+                        type2: '#06b6d4', // ปานกลาง
+                        type3: '#eab308', // มาก
+                        type4: '#f97316', // รุนแรง
+                        type5: '#ef4444', // วิกฤต
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Prompt', 'Sarabun', sans-serif;
+            background-color: #f8fafc;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="text-slate-800 bg-slate-50 min-h-screen flex flex-col">
+
+    <!-- Header Navigation -->
+    <header class="bg-gradient-to-r from-teal-700 via-sky-800 to-indigo-900 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Brand Title -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center text-teal-300 font-bold text-xl shadow-inner">
+                        <i class="fa-solid font-bold fa-hospital"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold tracking-wide leading-tight">ระบบรายงานผู้ป่วยประจำวัน</h1>
+                        <p class="text-xs text-teal-200">Inpatient Nursing Ward Census & Analytics Dashboard</p>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <nav class="hidden md:flex space-x-2">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white/20 text-white shadow-sm">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>Dashboard แดชบอร์ด</span>
+                    </button>
+                    <button onclick="switchTab('form')" id="nav-form" class="px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 text-teal-100 hover:bg-white/10">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                        <span>บันทึกข้อมูลประจำเวร</span>
+                    </button>
+                    <button onclick="switchTab('table')" id="nav-table" class="px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 text-teal-100 hover:bg-white/10">
+                        <i class="fa-solid fa-table-list"></i>
+                        <span>ประวัติการบันทึก</span>
+                    </button>
+                </nav>
+
+                <!-- Action Button -->
+                <div class="flex items-center space-x-2">
+                    <button onclick="openMobileLinkModal()" class="bg-white/10 hover:bg-white/20 text-teal-100 font-medium px-3 py-2 rounded-lg text-sm transition flex items-center space-x-1.5 border border-white/20" title="สแกน QR Code เพื่อกรอกบนมือถือ">
+                        <i class="fa-solid fa-qrcode text-base text-teal-300"></i>
+                        <span class="hidden sm:inline">ลิงก์มือถือ / QR Code</span>
+                    </button>
+                    <button onclick="openModal('addModal')" class="bg-teal-500 hover:bg-teal-400 text-white font-semibold px-3 py-2 rounded-lg text-sm transition shadow flex items-center space-x-1.5">
+                        <i class="fa-solid fa-plus-circle text-base"></i>
+                        <span class="hidden sm:inline">เพิ่มรายงานเวร</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Navigation Row -->
+        <div class="md:hidden flex border-t border-white/10 bg-black/10">
+            <button onclick="switchTab('dashboard')" id="mobile-nav-dashboard" class="flex-1 py-2 text-center text-xs font-medium text-white bg-white/20 border-b-2 border-teal-400">
+                <i class="fa-solid fa-chart-pie block text-base mb-0.5"></i> Dashboard
+            </button>
+            <button onclick="switchTab('form')" id="mobile-nav-form" class="flex-1 py-2 text-center text-xs font-medium text-teal-100 border-b-2 border-transparent">
+                <i class="fa-solid fa-pen-to-square block text-base mb-0.5"></i> บันทึกข้อมูล
+            </button>
+            <button onclick="switchTab('table')" id="mobile-nav-table" class="flex-1 py-2 text-center text-xs font-medium text-teal-100 border-b-2 border-transparent">
+                <i class="fa-solid fa-table-list block text-base mb-0.5"></i> ประวัติ
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+        <!-- Notification Toast Container -->
+        <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transition-all duration-300 transform translate-y-2">
+            <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+            <span id="toast-message" class="text-sm font-medium">บันทึกข้อมูลเรียบร้อย</span>
+        </div>
+
+        <!-- VIEW 1: DASHBOARD -->
+        <section id="view-dashboard" class="space-y-6">
+            <!-- Filter Bar & Ward Info -->
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="p-3 bg-teal-50 text-teal-700 rounded-xl">
+                        <i class="fa-solid fa-hospital-user text-xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">สรุปสถานการณ์ผู้ป่วยใน (Inpatient Ward Overview)</h2>
+                        <p class="text-xs text-slate-500" id="last-updated-text">ข้อมูลล่าสุด: --</p>
+                    </div>
+                </div>
+
+                <!-- Date & Shift Filter controls -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center space-x-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                        <label for="filter-date" class="text-xs text-slate-600 font-medium pl-2"><i class="fa-regular fa-calendar mr-1"></i>วันที่:</label>
+                        <input type="date" id="filter-date" class="bg-white text-xs font-semibold text-slate-700 px-2 py-1 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500" onchange="renderDashboard()">
+                    </div>
+
+                    <div class="flex items-center space-x-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                        <label for="filter-shift" class="text-xs text-slate-600 font-medium pl-2"><i class="fa-regular fa-clock mr-1"></i>เวร:</label>
+                        <select id="filter-shift" class="bg-white text-xs font-semibold text-slate-700 px-2 py-1 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500" onchange="renderDashboard()">
+                            <option value="latest">เวรล่าสุด (Latest Shift)</option>
+                            <option value="all">รวมทุกเวรในวัน (All Shifts)</option>
+                            <option value="เช้า">เวรเช้า (Morning)</option>
+                            <option value="บ่าย">เวรบ่าย (Afternoon)</option>
+                            <option value="ดึก">เวรดึก (Night)</option>
+                        </select>
+                    </div>
+
+                    <button onclick="resetFilters()" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded-xl transition font-medium">
+                        <i class="fa-solid fa-arrows-rotate mr-1"></i>รีเซ็ต
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPI Metric Cards Grid -->
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                <!-- Card 1: Total Patients -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 relative overflow-hidden group hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500">จำนวนผู้ป่วยรวม</p>
+                            <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1" id="kpi-current">0</h3>
+                            <p class="text-xs text-slate-500 mt-1" id="kpi-occupancy-rate">อัตราครองเตียง: 0%</p>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-bed-pulse"></i>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                        <div id="kpi-occupancy-bar" class="bg-teal-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Available Beds -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 relative overflow-hidden group hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500">เตียงว่างคงเหลือ</p>
+                            <h3 class="text-2xl sm:text-3xl font-extrabold text-emerald-600 mt-1" id="kpi-available">0</h3>
+                            <p class="text-xs text-slate-500 mt-1" id="kpi-total-capacity">ความจุทั้งหมด: 0 เตียง</p>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-door-open"></i>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                        <div id="kpi-available-bar" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Card 3: New Admissions -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 relative overflow-hidden group hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500">รับใหม่ (Admissions)</p>
+                            <h3 class="text-2xl sm:text-3xl font-extrabold text-sky-600 mt-1" id="kpi-admit">0</h3>
+                            <p class="text-xs text-emerald-600 font-medium mt-1 flex items-center">
+                                <i class="fa-solid fa-arrow-down-left mr-1 text-[10px]"></i>รับเข้ารักษาใหม่
+                            </p>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-user-plus"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 4: Discharges -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 relative overflow-hidden group hover:shadow-md transition">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500">จำหน่าย (Discharges)</p>
+                            <h3 class="text-2xl sm:text-3xl font-extrabold text-indigo-600 mt-1" id="kpi-discharge">0</h3>
+                            <p class="text-xs text-indigo-500 font-medium mt-1 flex items-center">
+                                <i class="fa-solid fa-house-medical-check mr-1 text-[10px]"></i>กลับบ้าน/ย้ายตึก
+                            </p>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-user-check"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 5: Referrals -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 relative overflow-hidden group hover:shadow-md transition col-span-2 lg:col-span-1">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-medium text-slate-500">ส่งต่อ (Refer)</p>
+                            <h3 class="text-2xl sm:text-3xl font-extrabold text-amber-600 mt-1" id="kpi-refer">0</h3>
+                            <p class="text-xs text-amber-600 font-medium mt-1 flex items-center">
+                                <i class="fa-solid fa-truck-medical mr-1 text-[10px]"></i>ส่งไป รพ. อื่น
+                            </p>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-ambulance"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Patient Level Breakdown Summary Widgets -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center">
+                    <i class="fa-solid fa-layer-group text-teal-600 mr-2"></i>
+                    จำแนกผู้ป่วยตามประเภทความรุนแรง (Patient Acuity Classification Level 1 - 5)
+                </h3>
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <!-- Type 1 -->
+                    <div class="bg-emerald-50/70 border border-emerald-200/80 p-3 rounded-xl">
+                        <div class="flex justify-between items-center text-xs font-semibold text-emerald-800">
+                            <span>ประเภท 1</span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <p class="text-xs text-emerald-600 mt-0.5 truncate">ดูแลเล็กน้อย (Self Care)</p>
+                        <div class="text-xl font-bold text-emerald-900 mt-2" id="kpi-type-1">0</div>
+                    </div>
+
+                    <!-- Type 2 -->
+                    <div class="bg-cyan-50/70 border border-cyan-200/80 p-3 rounded-xl">
+                        <div class="flex justify-between items-center text-xs font-semibold text-cyan-800">
+                            <span>ประเภท 2</span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>
+                        </div>
+                        <p class="text-xs text-cyan-600 mt-0.5 truncate">ปานกลาง (Moderate)</p>
+                        <div class="text-xl font-bold text-cyan-900 mt-2" id="kpi-type-2">0</div>
+                    </div>
+
+                    <!-- Type 3 -->
+                    <div class="bg-amber-50/70 border border-amber-200/80 p-3 rounded-xl">
+                        <div class="flex justify-between items-center text-xs font-semibold text-amber-800">
+                            <span>ประเภท 3</span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                        </div>
+                        <p class="text-xs text-amber-600 mt-0.5 truncate">มาก (High Dependency)</p>
+                        <div class="text-xl font-bold text-amber-900 mt-2" id="kpi-type-3">0</div>
+                    </div>
+
+                    <!-- Type 4 -->
+                    <div class="bg-orange-50/70 border border-orange-200/80 p-3 rounded-xl">
+                        <div class="flex justify-between items-center text-xs font-semibold text-orange-800">
+                            <span>ประเภท 4</span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                        </div>
+                        <p class="text-xs text-orange-600 mt-0.5 truncate">รุนแรง/ดูแลใกล้ชิด</p>
+                        <div class="text-xl font-bold text-orange-900 mt-2" id="kpi-type-4">0</div>
+                    </div>
+
+                    <!-- Type 5 -->
+                    <div class="bg-rose-50/70 border border-rose-200/80 p-3 rounded-xl col-span-2 sm:col-span-1">
+                        <div class="flex justify-between items-center text-xs font-semibold text-rose-800">
+                            <span>ประเภท 5</span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                        </div>
+                        <p class="text-xs text-rose-600 mt-0.5 truncate">วิกฤต (Critical)</p>
+                        <div class="text-xl font-bold text-rose-900 mt-2" id="kpi-type-5">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Grid Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Chart 1: Line Chart (Trend Over Time) -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-chart-line text-teal-600 mr-2"></i>
+                            แนวโน้มจำนวนผู้ป่วยและเตียงว่าง (7 วันล่าสุด)
+                        </h3>
+                        <span class="text-xs text-slate-500">ข้อมูลรายเวร</span>
+                    </div>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chart-trends"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Pie Chart (Patient Acuity Levels) -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-chart-pie text-indigo-600 mr-2"></i>
+                            สัดส่วนประเภทผู้ป่วย 1-5 (กราฟวงกลม)
+                        </h3>
+                    </div>
+                    <div class="relative h-72 w-full flex items-center justify-center">
+                        <canvas id="chart-acuity"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Movement Bar Chart (Admissions, Discharges, Refer) -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-arrows-turn-to-dots text-sky-600 mr-2"></i>
+                            สถิติการเคลื่อนย้ายผู้ป่วย (รับใหม่ / จำหน่าย / Refer) รายเวร
+                        </h3>
+                    </div>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chart-movement"></canvas>
+                    </div>
+                </div>
+
+                <!-- Shift Shift-based Occupancy Breakdown -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center">
+                            <i class="fa-solid fa-clock-rotate-left text-amber-600 mr-2"></i>
+                            การเปรียบเทียบภาระงานตามเวร
+                        </h3>
+                        <p class="text-xs text-slate-500 mb-4">เฉลี่ยผู้ป่วยรับใหม่และผู้ป่วยวิกฤตตามช่วงเวลาเวร</p>
+                        
+                        <div class="space-y-3" id="shift-summary-cards">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-3 border-t border-slate-100 text-center">
+                        <button onclick="switchTab('table')" class="text-xs text-teal-600 font-semibold hover:text-teal-800">
+                            ดูตารางประวัติทั้งหมด <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- VIEW 2: FORM INPUT -->
+        <section id="view-form" class="hidden max-w-4xl mx-auto space-y-6">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80">
+                <div class="border-b border-slate-100 pb-4 mb-6 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-clipboard-user text-teal-600 mr-2"></i>
+                            แบบฟอร์มบันทึกรายงานผู้ป่วยประจำเวร
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">กรอกข้อมูลจำนวนผู้ป่วย สถานะเตียง การรับเข้า-จำหน่าย และประเภทผู้ป่วย 1-5</p>
+                    </div>
+                    <span class="bg-teal-50 text-teal-700 text-xs px-3 py-1 rounded-full font-semibold border border-teal-200"> Form Mode</span>
+                </div>
+
+                <form id="record-form" onsubmit="handleFormSubmit(event)" class="space-y-6">
+                    <input type="hidden" id="form-id" value="">
+
+                    <!-- Section 1: Date & Shift Header -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/80 p-4 rounded-xl border border-slate-200/60">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">วันที่รายงาน <span class="text-rose-500">*</span></label>
+                            <input type="date" id="input-date" required class="w-full bg-white text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">เวร <span class="text-rose-500">*</span></label>
+                            <select id="input-shift" required class="w-full bg-white text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                                <option value="เช้า">เวรเช้า (08:00 - 16:00 น.)</option>
+                                <option value="บ่าย">เวรบ่าย (16:00 - 24:00 น.)</option>
+                                <option value="ดึก">เวรดึก (00:00 - 08:00 น.)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">ความจุเตียงทั้งหมด (Total Beds)</label>
+                            <input type="number" id="input-totalBeds" min="1" value="30" oninput="autoCalculateBeds()" required class="w-full bg-white text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Patient Census Metrics -->
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800 mb-3 border-l-4 border-teal-500 pl-2">1. ยอดผู้ป่วยและการเคลื่อนย้าย (Patient Movements)</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">จำนวนผู้ป่วยปัจจุบัน <span class="text-rose-500">*</span></label>
+                                <input type="number" id="input-currentPatients" min="0" required oninput="autoCalculateBeds(); validateTypesSum()" class="w-full text-base font-bold text-slate-800 bg-white border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">เตียงว่าง (Auto)</label>
+                                <input type="number" id="input-availableBeds" readonly class="w-full text-base font-bold text-emerald-700 bg-slate-100 border border-slate-300 rounded-lg p-2.5">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">รับใหม่ (Admissions)</label>
+                                <input type="number" id="input-newAdmissions" min="0" value="0" required class="w-full text-sm font-semibold text-sky-700 bg-white border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">จำหน่าย (Discharges)</label>
+                                <input type="number" id="input-discharges" min="0" value="0" required class="w-full text-sm font-semibold text-indigo-700 bg-white border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                            </div>
+
+                            <div class="col-span-2 md:col-span-1">
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">ส่งต่อ (Refer)</label>
+                                <input type="number" id="input-refers" min="0" value="0" required class="w-full text-sm font-semibold text-amber-700 bg-white border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Patient Classification 1-5 -->
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-sm font-bold text-slate-800 border-l-4 border-indigo-500 pl-2">2. จำนวนผู้ป่วยจำแนกตามประเภท (Patient Classification 1 - 5)</h3>
+                            <div id="types-sum-badge" class="text-xs px-3 py-1 rounded-full font-medium bg-amber-100 text-amber-800 border border-amber-300">
+                                รวมประเภท: <span id="types-sum-val">0</span> / ผู้ป่วยรวม: <span id="types-target-val">0</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                            <!-- Level 1 -->
+                            <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-200">
+                                <label class="block text-xs font-bold text-emerald-800 mb-1">ประเภท 1 (Self)</label>
+                                <p class="text-[10px] text-slate-500 mb-2">ช่วยเหลือตัวเองได้</p>
+                                <input type="number" id="input-type1" min="0" value="0" required oninput="validateTypesSum()" class="w-full text-center font-bold text-emerald-900 bg-white border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+
+                            <!-- Level 2 -->
+                            <div class="bg-cyan-50/50 p-3 rounded-xl border border-cyan-200">
+                                <label class="block text-xs font-bold text-cyan-800 mb-1">ประเภท 2 (Moderate)</label>
+                                <p class="text-[10px] text-slate-500 mb-2">พึ่งพาปานกลาง</p>
+                                <input type="number" id="input-type2" min="0" value="0" required oninput="validateTypesSum()" class="w-full text-center font-bold text-cyan-900 bg-white border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                            </div>
+
+                            <!-- Level 3 -->
+                            <div class="bg-amber-50/50 p-3 rounded-xl border border-amber-200">
+                                <label class="block text-xs font-bold text-amber-800 mb-1">ประเภท 3 (High)</label>
+                                <p class="text-[10px] text-slate-500 mb-2">พึ่งพามาก</p>
+                                <input type="number" id="input-type3" min="0" value="0" required oninput="validateTypesSum()" class="w-full text-center font-bold text-amber-900 bg-white border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            </div>
+
+                            <!-- Level 4 -->
+                            <div class="bg-orange-50/50 p-3 rounded-xl border border-orange-200">
+                                <label class="block text-xs font-bold text-orange-800 mb-1">ประเภท 4 (Intensive)</label>
+                                <p class="text-[10px] text-slate-500 mb-2">ดูแลใกล้ชิด</p>
+                                <input type="number" id="input-type4" min="0" value="0" required oninput="validateTypesSum()" class="w-full text-center font-bold text-orange-900 bg-white border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                            </div>
+
+                            <!-- Level 5 -->
+                            <div class="bg-rose-50/50 p-3 rounded-xl border border-rose-200">
+                                <label class="block text-xs font-bold text-rose-800 mb-1">ประเภท 5 (Critical)</label>
+                                <p class="text-[10px] text-slate-500 mb-2">วิกฤต/ช่วยชีวิต</p>
+                                <input type="number" id="input-type5" min="0" value="0" required oninput="validateTypesSum()" class="w-full text-center font-bold text-rose-900 bg-white border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Remarks/Note -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">หมายเหตุเพิ่มเติม / เหตุการณ์สำคัญในเวร</label>
+                        <textarea id="input-note" rows="2" placeholder="เช่น ผู้ป่วยย้ายเข้าห้อง ICU 1 ราย, เครื่องช่วยหายใจพร้อมใช้งาน..." class="w-full text-sm bg-white border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-teal-500 focus:outline-none"></textarea>
+                    </div>
+
+                    <!-- Submit Actions -->
+                    <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+                        <button type="button" onclick="clearForm()" class="px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
+                            ล้างข้อมูล
+                        </button>
+                        <button type="submit" id="btn-submit-form" class="px-6 py-2.5 rounded-lg text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 shadow-md transition flex items-center space-x-2">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>บันทึกรายงาน</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- VIEW 3: DATA HISTORY TABLE -->
+        <section id="view-table" class="hidden space-y-4">
+            <!-- Table Header Controls -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">ประวัติการบันทึกรายงานผู้ป่วย</h2>
+                    <p class="text-xs text-slate-500">ตารางแสดงรายการข้อมูลย้อนหลังทั้งหมดที่บันทึกไว้ในระบบ</p>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-3.5 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+                        <i class="fa-solid fa-file-excel text-sm"></i>
+                        <span>ส่งออก CSV</span>
+                    </button>
+                    <button onclick="clearAllData()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-medium px-3 py-2 rounded-xl transition">
+                        <i class="fa-solid fa-trash mr-1"></i>ล้างประวัติ
+                    </button>
+                </div>
+            </div>
+
+            <!-- Data Table Container -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100/80 text-slate-700 text-xs font-bold uppercase border-b border-slate-200">
+                                <th class="p-3.5">วันที่</th>
+                                <th class="p-3.5">เวร</th>
+                                <th class="p-3.5 text-center">ผู้ป่วยรวม</th>
+                                <th class="p-3.5 text-center">เตียงว่าง</th>
+                                <th class="p-3.5 text-center">รับใหม่</th>
+                                <th class="p-3.5 text-center">จำหน่าย</th>
+                                <th class="p-3.5 text-center">Refer</th>
+                                <th class="p-3.5 text-center">ประเภท 1-5 (จำแนก)</th>
+                                <th class="p-3.5">หมายเหตุ</th>
+                                <th class="p-3.5 text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-slate-100 text-xs sm:text-sm text-slate-700">
+                            <!-- Dynamic Row Loading -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="empty-state" class="hidden p-8 text-center">
+                    <i class="fa-solid fa-folder-open text-slate-300 text-4xl mb-2 block"></i>
+                    <p class="text-sm text-slate-500">ยังไม่มีข้อมูลการรายงานประจำเวร</p>
+                    <button onclick="switchTab('form')" class="mt-3 text-xs text-teal-600 font-semibold hover:underline">
+                        + คลิกที่นี่เพื่อเริ่มบันทึกข้อมูล
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Floating Mobile Action Button for Fast Entry -->
+    <div class="md:hidden fixed bottom-16 right-4 z-40">
+        <button onclick="switchTab('form')" class="bg-teal-600 hover:bg-teal-500 text-white p-3.5 rounded-full shadow-xl active:scale-95 transition flex items-center justify-center border-2 border-white" title="กรอกรายงานด่วน">
+            <i class="fa-solid fa-pen-to-square text-xl"></i>
+        </button>
+    </div>
+
+    <!-- Modal for Mobile Link & QR Code Share -->
+    <div id="modal-mobile-share" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-base font-bold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-mobile-screen-button text-teal-600 mr-2"></i>
+                    สแกนกรอกข้อมูลผ่านมือถือ
+                </h3>
+                <button onclick="closeModal('modal-mobile-share')" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Preview Mode Alert Warning -->
+            <div id="preview-url-warning" class="hidden bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs text-left leading-relaxed">
+                <p class="font-bold flex items-center text-amber-900 mb-1">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1.5 text-sm"></i>
+                    แจ้งเตือนการทดสอบ (Preview Mode):
+                </p>
+                ระบบกำลังรันในโหมดพรีวิวชั่วคราว มือถือภายนอกจะไม่สามารถเข้าถึง URL นี้ได้ กรุณานำไฟล์ <code class="bg-amber-100 px-1 rounded">index.html</code> ไปแขวนโฮสติ้งจริง หรือใส่ URL ของคุณด้านล่าง
+            </div>
+
+            <!-- Custom URL Input & QR Generation -->
+            <div class="space-y-2 text-left">
+                <label class="block text-xs font-bold text-slate-700">
+                    <i class="fa-solid fa-link text-teal-600 mr-1"></i>กรอก URL เว็บไซต์จริงของคุณ:
+                </label>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="mobile-share-url" oninput="updateQrCodeFromInput()" placeholder="เช่น https://ward-report.github.io หรือ Link จาก Google Apps Script" class="flex-1 bg-slate-50 text-xs font-mono text-slate-800 px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    <button onclick="copyMobileLink()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shrink-0 flex items-center space-x-1">
+                        <i class="fa-regular fa-copy"></i>
+                        <span>คัดลอก</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- QR Code Display -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 inline-block w-full">
+                <img id="mobile-qr-img" src="" alt="QR Code สำหรับมือถือ" class="w-48 h-48 mx-auto rounded-lg shadow-inner bg-white p-2">
+                <p class="text-[11px] text-slate-500 mt-2" id="qr-status-text">สแกน QR Code ด้วยกล้องมือถือ</p>
+            </div>
+
+            <!-- Deploy Instructions Guide -->
+            <div class="text-left bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-2">
+                <p class="font-bold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-cloud-arrow-up text-sky-600 mr-1.5"></i>
+                    วิธีสร้าง Link สำหรับมือถือเปิดได้จริง (ฟรี):
+                </p>
+                <ol class="list-decimal list-inside space-y-1.5 text-slate-600 text-[11px] leading-relaxed">
+                    <li><b>ดาวน์โหลดไฟล์:</b> นำไฟล์เว็บ <code class="bg-slate-200 px-1 rounded text-slate-800">index.html</code> ไปใช้งาน</li>
+                    <li><b>ฝากไฟล์ขึ้นเว็บฟรี:</b> นำไฟล์ไปลากวางในเว็บฟรีเช่น <b>Netlify Drop</b> (app.netlify.com/drop) หรือ <b>GitHub Pages</b></li>
+                    <li><b>นำ Link มาวาง:</b> ก๊อปปี้ URL เว็บที่ได้ มาวางในช่อง "กรอก URL" ด้านบน QR Code จะสร้างป้ายสแกนเข้ามือถือให้ทันที</li>
+                </ol>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+                <button onclick="closeModal('modal-mobile-share')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2 rounded-lg transition">
+                    ปิดหน้าต่าง
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Editing Entry -->
+    <div id="modal-edit" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-800">แก้ไขข้อมูลรายงาน</h3>
+                <button onclick="closeModal('modal-edit')" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div id="modal-edit-content">
+                <!-- Form clone dynamically placed here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic & Scripts -->
+    <script>
+        // Global Application State
+        let records = [];
+        let chartTrends = null;
+        let chartAcuity = null;
+        let chartMovement = null;
+
+        // Default Bed Capacity
+        const DEFAULT_BED_CAPACITY = 30;
+
+        // Initialize App on DOM Load
+        window.addEventListener('DOMContentLoaded', () => {
+            initSampleData();
+            setDefaultFormDate();
+            renderDashboard();
+            renderTable();
+        });
+
+        // Open Mobile Share & QR Code Modal
+        function openMobileLinkModal() {
+            const currentUrl = window.location.href;
+            const urlInput = document.getElementById('mobile-share-url');
+            const warningBox = document.getElementById('preview-url-warning');
+
+            // Detect if running inside a preview iframe / local session
+            const isPreviewEnv = currentUrl.startsWith('blob:') || 
+                                 currentUrl.includes('googleusercontent.com') || 
+                                 currentUrl.includes('localhost') || 
+                                 currentUrl.startsWith('about:');
+
+            if (warningBox) {
+                if (isPreviewEnv) {
+                    warningBox.classList.remove('hidden');
+                } else {
+                    warningBox.classList.add('hidden');
+                }
+            }
+
+            if (urlInput) {
+                if (!urlInput.value || urlInput.value === '') {
+                    urlInput.value = isPreviewEnv ? '' : currentUrl;
+                }
+            }
+
+            updateQrCodeFromInput();
+            document.getElementById('modal-mobile-share').classList.remove('hidden');
+        }
+
+        // Update QR Code dynamically based on input URL
+        function updateQrCodeFromInput() {
+            const urlInput = document.getElementById('mobile-share-url');
+            const qrImg = document.getElementById('mobile-qr-img');
+            const statusText = document.getElementById('qr-status-text');
+
+            let targetUrl = urlInput ? urlInput.value.trim() : '';
+
+            if (!targetUrl) {
+                targetUrl = window.location.href;
+            }
+
+            if (qrImg) {
+                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(targetUrl)}`;
+            }
+
+            if (statusText) {
+                statusText.innerText = targetUrl ? `QR Code สำหรับ: ${targetUrl.substring(0, 35)}${targetUrl.length > 35 ? '...' : ''}` : 'กรุณากรอก URL เพื่อสร้าง QR Code';
+            }
+        }
+
+        // Copy Mobile Link to Clipboard
+        function copyMobileLink() {
+            const urlInput = document.getElementById('mobile-share-url');
+            if (!urlInput || !urlInput.value) {
+                showToast('กรุณากรอก URL เว็บไซต์ก่อนคัดลอก', true);
+                return;
+            }
+
+            urlInput.select();
+            urlInput.setSelectionRange(0, 99999);
+            
+            try {
+                document.execCommand('copy');
+                showToast('คัดลอก Link เรียบร้อยแล้ว!');
+            } catch (err) {
+                showToast('ไม่สามารถคัดลอกอัตโนมัติได้ กรุณาเลือกและคัดลอกด้วยตนเอง', true);
+            }
+        }
+
+        // Initialize Sample Data if local storage is empty
+        function initSampleData() {
+            const saved = localStorage.getItem('ward_patient_records');
+            if (saved) {
+                try {
+                    records = JSON.parse(saved);
+                } catch(e) {
+                    records = generateMockRecords();
+                }
+            } else {
+                records = generateMockRecords();
+                saveRecords();
+            }
+        }
+
+        // Generate 7 Days of Mock Data for initial interactive demo
+        function generateMockRecords() {
+            const shifts = ['เช้า', 'บ่าย', 'ดึก'];
+            const mock = [];
+            const today = new Date();
+
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(d.getDate() - i);
+                const dateStr = d.toISOString().split('T')[0];
+
+                shifts.forEach(shift => {
+                    const totalBeds = 30;
+                    const newAdmit = Math.floor(Math.random() * 4);
+                    const discharge = Math.floor(Math.random() * 3);
+                    const refer = Math.floor(Math.random() * 2);
+                    
+                    // Generate logical breakdown
+                    const t1 = 5 + Math.floor(Math.random() * 4);
+                    const t2 = 6 + Math.floor(Math.random() * 4);
+                    const t3 = 4 + Math.floor(Math.random() * 3);
+                    const t4 = 2 + Math.floor(Math.random() * 2);
+                    const t5 = Math.floor(Math.random() * 2);
+
+                    const currentPatients = t1 + t2 + t3 + t4 + t5;
+                    const availableBeds = totalBeds - currentPatients;
+
+                    mock.push({
+                        id: 'REC_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        date: dateStr,
+                        shift: shift,
+                        totalBeds: totalBeds,
+                        currentPatients: currentPatients,
+                        availableBeds: availableBeds,
+                        newAdmissions: newAdmit,
+                        discharges: discharge,
+                        refers: refer,
+                        type1: t1,
+                        type2: t2,
+                        type3: t3,
+                        type4: t4,
+                        type5: t5,
+                        note: 'รายงานปกติประจำเวร' + shift,
+                        timestamp: d.getTime()
+                    });
+                });
+            }
+            return mock;
+        }
+
+        function saveRecords() {
+            localStorage.setItem('ward_patient_records', JSON.stringify(records));
+        }
+
+        // Set Today's Date into Input Form
+        function setDefaultFormDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('input-date').value = today;
+            document.getElementById('filter-date').value = today;
+            autoCalculateBeds();
+        }
+
+        // Auto Calculate Available Beds
+        function autoCalculateBeds() {
+            const capacity = parseInt(document.getElementById('input-totalBeds').value) || DEFAULT_BED_CAPACITY;
+            const current = parseInt(document.getElementById('input-currentPatients').value) || 0;
+            const available = Math.max(0, capacity - current);
+            document.getElementById('input-availableBeds').value = available;
+        }
+
+        // Validate that Patient Types 1-5 sum equals Total Current Patients
+        function validateTypesSum() {
+            const current = parseInt(document.getElementById('input-currentPatients').value) || 0;
+            const t1 = parseInt(document.getElementById('input-type1').value) || 0;
+            const t2 = parseInt(document.getElementById('input-type2').value) || 0;
+            const t3 = parseInt(document.getElementById('input-type3').value) || 0;
+            const t4 = parseInt(document.getElementById('input-type4').value) || 0;
+            const t5 = parseInt(document.getElementById('input-type5').value) || 0;
+
+            const sum = t1 + t2 + t3 + t4 + t5;
+            const badge = document.getElementById('types-sum-badge');
+            const sumVal = document.getElementById('types-sum-val');
+            const targetVal = document.getElementById('types-target-val');
+
+            sumVal.innerText = sum;
+            targetVal.innerText = current;
+
+            if (sum === current) {
+                badge.className = "text-xs px-3 py-1 rounded-full font-medium bg-emerald-100 text-emerald-800 border border-emerald-300";
+            } else {
+                badge.className = "text-xs px-3 py-1 rounded-full font-medium bg-rose-100 text-rose-800 border border-rose-300 animate-pulse";
+            }
+        }
+
+        // Tab Switch Navigation
+        function switchTab(tab) {
+            // Views
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-form').classList.add('hidden');
+            document.getElementById('view-table').classList.add('hidden');
+
+            // Desktop Buttons
+            const navBtnDash = document.getElementById('nav-dashboard');
+            const navBtnForm = document.getElementById('nav-form');
+            const navBtnTable = document.getElementById('nav-table');
+
+            // Mobile Buttons
+            const mobDash = document.getElementById('mobile-nav-dashboard');
+            const mobForm = document.getElementById('mobile-nav-form');
+            const mobTable = document.getElementById('mobile-nav-table');
+
+            // Reset tab styles
+            [navBtnDash, navBtnForm, navBtnTable].forEach(b => {
+                b.className = "px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 text-teal-100 hover:bg-white/10";
+            });
+            [mobDash, mobForm, mobTable].forEach(b => {
+                b.className = "flex-1 py-2 text-center text-xs font-medium text-teal-100 border-b-2 border-transparent";
+            });
+
+            if (tab === 'dashboard') {
+                document.getElementById('view-dashboard').classList.remove('hidden');
+                navBtnDash.className = "px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white/20 text-white shadow-sm";
+                mobDash.className = "flex-1 py-2 text-center text-xs font-medium text-white bg-white/20 border-b-2 border-teal-400";
+                renderDashboard();
+            } else if (tab === 'form') {
+                document.getElementById('view-form').classList.remove('hidden');
+                navBtnForm.className = "px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white/20 text-white shadow-sm";
+                mobForm.className = "flex-1 py-2 text-center text-xs font-medium text-white bg-white/20 border-b-2 border-teal-400";
+            } else if (tab === 'table') {
+                document.getElementById('view-table').classList.remove('hidden');
+                navBtnTable.className = "px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white/20 text-white shadow-sm";
+                mobTable.className = "flex-1 py-2 text-center text-xs font-medium text-white bg-white/20 border-b-2 border-teal-400";
+                renderTable();
+            }
+        }
+
+        // Open Modal
+        function openModal(type) {
+            if (type === 'addModal') {
+                switchTab('form');
+            }
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // Toast Message Notification
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = message;
+            if (isError) {
+                toastIcon.className = "fa-solid fa-triangle-exclamation text-rose-400 text-lg";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-lg";
+            }
+
+            toast.classList.remove('hidden', 'translate-y-2');
+            toast.classList.add('translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.add('hidden', 'translate-y-2');
+            }, 3000);
+        }
+
+        // Handle Form Submission
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const date = document.getElementById('input-date').value;
+            const shift = document.getElementById('input-shift').value;
+            const totalBeds = parseInt(document.getElementById('input-totalBeds').value) || DEFAULT_BED_CAPACITY;
+            const currentPatients = parseInt(document.getElementById('input-currentPatients').value) || 0;
+            const availableBeds = Math.max(0, totalBeds - currentPatients);
+            const newAdmissions = parseInt(document.getElementById('input-newAdmissions').value) || 0;
+            const discharges = parseInt(document.getElementById('input-discharges').value) || 0;
+            const refers = parseInt(document.getElementById('input-refers').value) || 0;
+
+            const t1 = parseInt(document.getElementById('input-type1').value) || 0;
+            const t2 = parseInt(document.getElementById('input-type2').value) || 0;
+            const t3 = parseInt(document.getElementById('input-type3').value) || 0;
+            const t4 = parseInt(document.getElementById('input-type4').value) || 0;
+            const t5 = parseInt(document.getElementById('input-type5').value) || 0;
+            const note = document.getElementById('input-note').value;
+
+            // Warning validation check
+            if ((t1 + t2 + t3 + t4 + t5) !== currentPatients) {
+                showToast(`คำเตือน: ผลรวมประเภทผู้ป่วย 1-5 (${t1+t2+t3+t4+t5}) ไม่ตรงกับผู้ป่วยรวม (${currentPatients})`, true);
+            }
+
+            const editId = document.getElementById('form-id').value;
+
+            if (editId) {
+                // Update Existing Record
+                const idx = records.findIndex(r => r.id === editId);
+                if (idx !== -1) {
+                    records[idx] = {
+                        ...records[idx],
+                        date, shift, totalBeds, currentPatients, availableBeds,
+                        newAdmissions, discharges, refers,
+                        type1: t1, type2: t2, type3: t3, type4: t4, type5: t5,
+                        note
+                    };
+                    showToast('อัปเดตข้อมูลการรายงานสำเร็จ');
+                }
+            } else {
+                // Check if date + shift already exists
+                const existingIdx = records.findIndex(r => r.date === date && r.shift === shift);
+                if (existingIdx !== -1) {
+                    // Overwrite or Alert
+                    records[existingIdx] = {
+                        id: records[existingIdx].id,
+                        date, shift, totalBeds, currentPatients, availableBeds,
+                        newAdmissions, discharges, refers,
+                        type1: t1, type2: t2, type3: t3, type4: t4, type5: t5,
+                        note, timestamp: Date.now()
+                    };
+                    showToast(`อัปเดตทับข้อมูลวันที่ ${date} เวร${shift} เรียบร้อย`);
+                } else {
+                    // New Entry
+                    const newRecord = {
+                        id: 'REC_' + Date.now(),
+                        date, shift, totalBeds, currentPatients, availableBeds,
+                        newAdmissions, discharges, refers,
+                        type1: t1, type2: t2, type3: t3, type4: t4, type5: t5,
+                        note, timestamp: Date.now()
+                    };
+                    records.push(newRecord);
+                    showToast('บันทึกข้อมูลเวรใหม่เรียบร้อย');
+                }
+            }
+
+            saveRecords();
+            clearForm();
+            switchTab('dashboard');
+        }
+
+        function clearForm() {
+            document.getElementById('form-id').value = '';
+            document.getElementById('input-currentPatients').value = '';
+            document.getElementById('input-newAdmissions').value = '0';
+            document.getElementById('input-discharges').value = '0';
+            document.getElementById('input-refers').value = '0';
+            document.getElementById('input-type1').value = '0';
+            document.getElementById('input-type2').value = '0';
+            document.getElementById('input-type3').value = '0';
+            document.getElementById('input-type4').value = '0';
+            document.getElementById('input-type5').value = '0';
+            document.getElementById('input-note').value = '';
+            setDefaultFormDate();
+            validateTypesSum();
+        }
+
+        // Render Dashboard Calculations & Charts
+        function renderDashboard() {
+            if (records.length === 0) return;
+
+            // Sort records chronologically
+            const sorted = [...records].sort((a,b) => (a.date + a.shift).localeCompare(b.date + b.shift));
+
+            // Selected Filters
+            const filterDate = document.getElementById('filter-date').value;
+            const filterShift = document.getElementById('filter-shift').value;
+
+            // Filtered records
+            let filtered = sorted;
+            if (filterDate) {
+                filtered = filtered.filter(r => r.date === filterDate);
+            }
+
+            let displayRecord = null;
+
+            if (filtered.length > 0) {
+                if (filterShift === 'latest') {
+                    displayRecord = filtered[filtered.length - 1];
+                } else if (filterShift === 'all') {
+                    // Aggregate multiple shift records
+                    displayRecord = aggregateRecords(filtered);
+                } else {
+                    const matched = filtered.filter(r => r.shift === filterShift);
+                    displayRecord = matched.length > 0 ? matched[matched.length - 1] : aggregateRecords(filtered);
+                }
+            } else {
+                // Fallback if no exact date match: use overall latest record
+                displayRecord = sorted[sorted.length - 1];
+            }
+
+            if (!displayRecord) return;
+
+            // Update KPI Cards
+            document.getElementById('kpi-current').innerText = displayRecord.currentPatients || 0;
+            document.getElementById('kpi-available').innerText = displayRecord.availableBeds || 0;
+            document.getElementById('kpi-admit').innerText = displayRecord.newAdmissions || 0;
+            document.getElementById('kpi-discharge').innerText = displayRecord.discharges || 0;
+            document.getElementById('kpi-refer').innerText = displayRecord.refers || 0;
+
+            const totalCap = displayRecord.totalBeds || DEFAULT_BED_CAPACITY;
+            const occRate = Math.round(((displayRecord.currentPatients || 0) / totalCap) * 100);
+            
+            document.getElementById('kpi-occupancy-rate').innerText = `อัตราครองเตียง: ${occRate}%`;
+            document.getElementById('kpi-total-capacity').innerText = `ความจุทั้งหมด: ${totalCap} เตียง`;
+            
+            document.getElementById('kpi-occupancy-bar').style.width = `${Math.min(100, occRate)}%`;
+            document.getElementById('kpi-available-bar').style.width = `${Math.min(100, 100 - occRate)}%`;
+
+            // Patient Levels
+            document.getElementById('kpi-type-1').innerText = displayRecord.type1 || 0;
+            document.getElementById('kpi-type-2').innerText = displayRecord.type2 || 0;
+            document.getElementById('kpi-type-3').innerText = displayRecord.type3 || 0;
+            document.getElementById('kpi-type-4').innerText = displayRecord.type4 || 0;
+            document.getElementById('kpi-type-5').innerText = displayRecord.type5 || 0;
+
+            document.getElementById('last-updated-text').innerText = `ข้อมูล ณ วันที่: ${displayRecord.date} | เวร: ${displayRecord.shift}`;
+
+            // Render Charts
+            renderCharts(sorted, displayRecord);
+            renderShiftSummary(sorted);
+        }
+
+        // Aggregate Multiple Records into one KPI view
+        function aggregateRecords(list) {
+            if (list.length === 0) return null;
+            const last = list[list.length - 1];
+            return {
+                date: last.date,
+                shift: 'รวมตลอดวัน',
+                totalBeds: last.totalBeds,
+                currentPatients: last.currentPatients,
+                availableBeds: last.availableBeds,
+                newAdmissions: list.reduce((s, r) => s + r.newAdmissions, 0),
+                discharges: list.reduce((s, r) => s + r.discharges, 0),
+                refers: list.reduce((s, r) => s + r.refers, 0),
+                type1: last.type1,
+                type2: last.type2,
+                type3: last.type3,
+                type4: last.type4,
+                type5: last.type5,
+            };
+        }
+
+        // Render Chart.js
+        function renderCharts(allSortedRecords, currentDisplay) {
+            // 1. Line Chart: Trend Over Last 10 Entries
+            const recent10 = allSortedRecords.slice(-12);
+            const trendLabels = recent10.map(r => `${r.date.substr(5)} (${r.shift})`);
+            const trendPatients = recent10.map(r => r.currentPatients);
+            const trendAvailable = recent10.map(r => r.availableBeds);
+
+            const ctx1 = document.getElementById('chart-trends').getContext('2d');
+            if (chartTrends) chartTrends.destroy();
+            chartTrends = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: trendLabels,
+                    datasets: [
+                        {
+                            label: 'ผู้ป่วยครองเตียง',
+                            data: trendPatients,
+                            borderColor: '#0284c7',
+                            backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            borderWidth: 2.5,
+                            pointRadius: 4
+                        },
+                        {
+                            label: 'เตียงว่าง',
+                            data: trendAvailable,
+                            borderColor: '#10b981',
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.3,
+                            borderWidth: 2,
+                            pointRadius: 3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { font: { family: 'Prompt', size: 11 } } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // 2. Doughnut Chart: Patient Classification
+            // 2. Pie Chart: Patient Classification
+            const ctx2 = document.getElementById('chart-acuity').getContext('2d');
+            if (chartAcuity) chartAcuity.destroy();
+            chartAcuity = new Chart(ctx2, {
+                type: 'pie',
+                data: {
+                    labels: ['ประเภท 1 (Self Care)', 'ประเภท 2 (Moderate)', 'ประเภท 3 (High Dependency)', 'ประเภท 4 (Intensive)', 'ประเภท 5 (Critical)'],
+                    datasets: [{
+                        data: [
+                            currentDisplay.type1 || 0,
+                            currentDisplay.type2 || 0,
+                            currentDisplay.type3 || 0,
+                            currentDisplay.type4 || 0,
+                            currentDisplay.type5 || 0
+                        ],
+                        backgroundColor: ['#10b981', '#06b6d4', '#eab308', '#f97316', '#ef4444'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { font: { family: 'Prompt', size: 10 } } }
+                    }
+                }
+            });
+
+            // 3. Movement Bar Chart
+            const ctx3 = document.getElementById('chart-movement').getContext('2d');
+            if (chartMovement) chartMovement.destroy();
+            chartMovement = new Chart(ctx3, {
+                type: 'bar',
+                data: {
+                    labels: trendLabels,
+                    datasets: [
+                        {
+                            label: 'รับใหม่',
+                            data: recent10.map(r => r.newAdmissions),
+                            backgroundColor: '#0284c7',
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'จำหน่าย',
+                            data: recent10.map(r => r.discharges),
+                            backgroundColor: '#6366f1',
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Refer',
+                            data: recent10.map(r => r.refers),
+                            backgroundColor: '#f59e0b',
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { font: { family: 'Prompt', size: 11 } } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // Render Shift Workload Summary
+        function renderShiftSummary(sortedRecords) {
+            const container = document.getElementById('shift-summary-cards');
+            const shifts = ['เช้า', 'บ่าย', 'ดึก'];
+            const colors = {
+                'เช้า': 'bg-blue-50 border-blue-200 text-blue-800',
+                'บ่าย': 'bg-amber-50 border-amber-200 text-amber-800',
+                'ดึก': 'bg-indigo-50 border-indigo-200 text-indigo-800'
+            };
+
+            let html = '';
+            shifts.forEach(s => {
+                const shiftRecords = sortedRecords.filter(r => r.shift === s);
+                const count = shiftRecords.length || 1;
+                const avgAdmit = (shiftRecords.reduce((a, b) => a + b.newAdmissions, 0) / count).toFixed(1);
+                const avgDischarge = (shiftRecords.reduce((a, b) => a + b.discharges, 0) / count).toFixed(1);
+
+                html += `
+                    <div class="p-3 rounded-xl border ${colors[s]} flex justify-between items-center">
+                        <div>
+                            <span class="font-bold text-xs uppercase tracking-wider block">เวร${s}</span>
+                            <span class="text-[11px] text-slate-600">รับใหม่เฉลี่ย: ${avgAdmit} คน/เวร</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs font-semibold block text-slate-700">จำหน่ายเฉลี่ย</span>
+                            <span class="text-xs font-bold">${avgDischarge} คน</span>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // Reset Filter Dropdowns
+        function resetFilters() {
+            setDefaultFormDate();
+            document.getElementById('filter-shift').value = 'latest';
+            renderDashboard();
+        }
+
+        // Render History Table
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            const emptyState = document.getElementById('empty-state');
+
+            if (records.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            const sorted = [...records].sort((a, b) => b.timestamp - a.timestamp);
+
+            let html = '';
+            sorted.forEach(r => {
+                const shiftBadgeClass = r.shift === 'เช้า' 
+                    ? 'bg-blue-100 text-blue-800' 
+                    : r.shift === 'บ่าย' 
+                    ? 'bg-amber-100 text-amber-800' 
+                    : 'bg-indigo-100 text-indigo-800';
+
+                html += `
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="p-3.5 font-medium text-slate-800">${r.date}</td>
+                        <td class="p-3.5">
+                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${shiftBadgeClass}">${r.shift}</span>
+                        </td>
+                        <td class="p-3.5 text-center font-bold text-slate-800">${r.currentPatients}</td>
+                        <td class="p-3.5 text-center font-bold text-emerald-600">${r.availableBeds}</td>
+                        <td class="p-3.5 text-center text-sky-600 font-semibold">+${r.newAdmissions}</td>
+                        <td class="p-3.5 text-center text-indigo-600 font-semibold">-${r.discharges}</td>
+                        <td class="p-3.5 text-center text-amber-600 font-semibold">${r.refers}</td>
+                        <td class="p-3.5">
+                            <div class="flex items-center justify-center space-x-1 text-[11px]">
+                                <span class="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold" title="ประเภท 1">${r.type1}</span>
+                                <span class="bg-cyan-100 text-cyan-800 px-1.5 py-0.5 rounded font-bold" title="ประเภท 2">${r.type2}</span>
+                                <span class="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold" title="ประเภท 3">${r.type3}</span>
+                                <span class="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded font-bold" title="ประเภท 4">${r.type4}</span>
+                                <span class="bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded font-bold" title="ประเภท 5">${r.type5}</span>
+                            </div>
+                        </td>
+                        <td class="p-3.5 max-w-xs truncate text-xs text-slate-500">${r.note || '-'}</td>
+                        <td class="p-3.5 text-center space-x-1">
+                            <button onclick="editRecord('${r.id}')" class="p-1.5 text-teal-600 hover:text-teal-800 hover:bg-teal-50 rounded-lg transition" title="แก้ไข">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button onclick="deleteRecord('${r.id}')" class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition" title="ลบ">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // Edit Record
+        function editRecord(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+
+            document.getElementById('form-id').value = rec.id;
+            document.getElementById('input-date').value = rec.date;
+            document.getElementById('input-shift').value = rec.shift;
+            document.getElementById('input-totalBeds').value = rec.totalBeds;
+            document.getElementById('input-currentPatients').value = rec.currentPatients;
+            document.getElementById('input-availableBeds').value = rec.availableBeds;
+            document.getElementById('input-newAdmissions').value = rec.newAdmissions;
+            document.getElementById('input-discharges').value = rec.discharges;
+            document.getElementById('input-refers').value = rec.refers;
+            document.getElementById('input-type1').value = rec.type1;
+            document.getElementById('input-type2').value = rec.type2;
+            document.getElementById('input-type3').value = rec.type3;
+            document.getElementById('input-type4').value = rec.type4;
+            document.getElementById('input-type5').value = rec.type5;
+            document.getElementById('input-note').value = rec.note || '';
+
+            validateTypesSum();
+            switchTab('form');
+            showToast(`โหลดข้อมูลวันที่ ${rec.date} (${rec.shift}) เพื่อแก้ไข`);
+        }
+
+        // Delete Single Record
+        function deleteRecord(id) {
+            records = records.filter(r => r.id !== id);
+            saveRecords();
+            renderTable();
+            renderDashboard();
+            showToast('ลบรายการข้อมูลเรียบร้อยแล้ว');
+        }
+
+        // Clear All Data History
+        function clearAllData() {
+            records = [];
+            saveRecords();
+            renderTable();
+            renderDashboard();
+            showToast('ล้างประวัติข้อมูลทั้งหมดเรียบร้อย');
+        }
+
+        // Export Data Records to CSV
+        function exportToCSV() {
+            if (records.length === 0) {
+                showToast('ไม่มีข้อมูลสำหรับส่งออก', true);
+                return;
+            }
+
+            const headers = ['Date', 'Shift', 'TotalBeds', 'CurrentPatients', 'AvailableBeds', 'NewAdmissions', 'Discharges', 'Refers', 'Type1', 'Type2', 'Type3', 'Type4', 'Type5', 'Note'];
+            const rows = records.map(r => [
+                r.date,
+                `"${r.shift}"`,
+                r.totalBeds,
+                r.currentPatients,
+                r.availableBeds,
+                r.newAdmissions,
+                r.discharges,
+                r.refers,
+                r.type1,
+                r.type2,
+                r.type3,
+                r.type4,
+                r.type5,
+                `"${(r.note || '').replace(/"/g, '""')}"`
+            ]);
+
+            const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `patient_report_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showToast('ส่งออกไฟล์ CSV สำเร็จ');
+        }
+    </script>
+</body>
+</html>
